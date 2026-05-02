@@ -8,7 +8,10 @@ const TARGET_HOST = process.env.TARGET_HOST || '127.0.0.1';
 const stateFile = path.join(__dirname, '..', 'data', 'active-target.json');
 
 function readTargetPort() {
-  const raw = fs.readFileSync(stateFile, 'utf8');
+  const raw = fs
+    .readFileSync(stateFile, 'utf8')
+    .replace(/^\uFEFF/, '')
+    .trim();
   const parsed = JSON.parse(raw);
   const port = Number(parsed.port);
   if (!Number.isInteger(port) || port <= 0) {

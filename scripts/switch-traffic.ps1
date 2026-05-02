@@ -41,7 +41,9 @@ catch {
 Copy-Item -Force $activeFile $previousFile
 
 $next = [ordered]@{ port = $nextPort; label = $nextLabel }
-($next | ConvertTo-Json -Depth 5) + "`n" | Set-Content -Encoding utf8 $activeFile
+$json = ($next | ConvertTo-Json -Depth 5) + "`n"
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText($activeFile, $json, $utf8NoBom)
 
 Write-Host "Switched active traffic to $nextLabel (port $nextPort)."
 Write-Host "Previous routing saved to data\previous-target.json"
