@@ -1,0 +1,44 @@
+---
+# Run from repo root (single command):
+#   ansible-playbook ansible/site.yml
+#
+# On Ubuntu/Debian this installs Node.js + npm and ensures local folders exist.
+# On other OS families it only creates folders (install Node from vendor docs).
+
+- name: Prepare environment for midterm todo app
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    project_root: "{{ (playbook_dir ~ '/..') | realpath }}"
+
+  tasks:
+    - name: Ensure project log directory exists
+      ansible.builtin.file:
+        path: "{{ project_root }}/logs"
+        state: directory
+        mode: "0755"
+
+    - name: Ensure data directory exists
+      ansible.builtin.file:
+        path: "{{ project_root }}/data"
+        state: directory
+        mode: "0755"
+
+    - name: Install Node.js and npm (Debian/Ubuntu)
+      when: ansible_os_family == 'Debian'
+      become: true
+      ansible.builtin.apt:
+        name:
+          - nodejs
+          - npm
+        state: present
+        update_cache: true
+
+    - name: Skip Node apt install on non-Debian hosts
+      when: ansible_os_family != 'Debian'
+      ansible.builtin.debug:
+        msg: >-
+          Node.js was not installed via apt (non-Debian). Install Node 18+ manually,
+          then run npm ci && npm test locally.
