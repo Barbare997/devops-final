@@ -27,6 +27,15 @@ npm test
 npm start
 ```
 
+Windows PowerShell (same steps; run from the repo folder):
+
+```powershell
+npm ci
+npm run lint
+npm test
+npm start
+```
+
 App URL: `http://localhost:3000/`
 
 ## Blue-green deployment simulation
@@ -36,7 +45,53 @@ Run two app instances:
 - Blue: port `3001`
 - Green: port `3002`
 
-Run router:
+Use **three terminals**. If PowerShell blocks scripts, run once per session:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+**Windows PowerShell**
+
+Terminal A (blue):
+
+```powershell
+$env:PORT="3001"
+$env:DEPLOY_SLOT="blue"
+$env:APP_VERSION="1"
+npm start
+```
+
+Terminal B (green):
+
+```powershell
+$env:PORT="3002"
+$env:DEPLOY_SLOT="green"
+$env:APP_VERSION="2"
+npm start
+```
+
+Terminal C (router):
+
+```powershell
+npm run start:router
+```
+
+**macOS / Linux**
+
+Terminal A (blue):
+
+```bash
+PORT=3001 DEPLOY_SLOT=blue APP_VERSION=1 npm start
+```
+
+Terminal B (green):
+
+```bash
+PORT=3002 DEPLOY_SLOT=green APP_VERSION=2 npm start
+```
+
+Terminal C (router):
 
 ```bash
 npm run start:router
@@ -111,4 +166,44 @@ Runs on push and pull request:
 
 ### CI/CD workflow diagram
 
-![CI/CD workflow diagram](docs/readme/cicd-diagram.png)
+```
+Developer
+   |
+   |  git push / pull request
+   v
+GitHub Actions (CI)
+   |-- npm ci
+   |-- npm run lint
+   '-- npm test
+
+Developer machine (local "production" demo)
+   |
+   |  ansible-playbook ansible/site.yml  (environment prep)
+   v
+Two backends
+   |-- Blue app  :3001
+   '-- Green app :3002
+           ^
+           |
+   Router :8080 (src/router.js)
+           |
+           |  reads
+           v
+   data/active-target.json
+      ^            ^
+      |            |
+      |     switch-traffic script
+      |            |
+      '---- rollback script
+
+Health monitor script
+   |
+   |  polls http://localhost:8080/health
+   v
+logs/health.log
+```
+
+## Repository
+
+https://github.com/Barbare997/midterm_devops
+

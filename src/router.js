@@ -8,11 +8,13 @@ const TARGET_HOST = process.env.TARGET_HOST || '127.0.0.1';
 const stateFile = path.join(__dirname, '..', 'data', 'active-target.json');
 
 function readTargetPort() {
-  const raw = fs
-    .readFileSync(stateFile, 'utf8')
-    .replace(/^\uFEFF/, '')
-    .trim();
-  const parsed = JSON.parse(raw);
+  const raw = fs.readFileSync(stateFile, 'utf8');
+  const cleaned = raw.replace(/^\uFEFF/, '').trimStart();
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  if (!match) {
+    throw new Error('No JSON object found in active-target.json');
+  }
+  const parsed = JSON.parse(match[0]);
   const port = Number(parsed.port);
   if (!Number.isInteger(port) || port <= 0) {
     throw new Error('Invalid port in active-target.json');
