@@ -1,6 +1,6 @@
-# Midterm Project
+# DevOps Todo App
 
-Todo list web application with CI, infrastructure automation, blue-green deployment simulation, rollback scripts, and periodic health monitoring.
+Todo list web application with CI/CD to Render, infrastructure automation, blue-green deployment simulation, rollback scripts, and periodic health monitoring.
 
 ## Tech stack
 
@@ -37,6 +37,16 @@ npm start
 ```
 
 App URL: `http://localhost:3000/`
+
+## Live application (Render)
+
+**URL:** https://devops-final-todo.onrender.com
+
+Health check: https://devops-final-todo.onrender.com/health
+
+Hosted on [Render](https://render.com) (free tier). After a period of inactivity the service may take ~30 seconds to wake up on the first request.
+
+![Live app on Render](docs/readme/live-render.png)
 
 ## Blue-green deployment simulation
 
@@ -124,15 +134,42 @@ ansible-playbook ansible/site.yml
 
 On Windows, run this from **WSL (Ubuntu)**. Install Ansible inside WSL (`sudo apt install ansible`), `cd` to the project path under `/mnt/c/...`, then run the command above. The playbook still targets the same repo files on your Windows drive.
 
-## CI pipeline
+## CI/CD pipeline
 
 Workflow file: `.github/workflows/ci.yml`
 
-Runs on push and pull request:
+On every push and pull request:
 
 - `npm ci`
 - `npm run lint`
 - `npm test`
+
+On push to `main` only (after the steps above succeed):
+
+- Deploy to Render via deploy hook (`RENDER_DEPLOY_HOOK` secret)
+
+Render auto-deploy is **off**; production deploys run only from GitHub Actions.
+
+If lint or tests fail, the workflow stops and the **deploy** job does not run.
+
+## Deployment strategy
+
+**Chosen strategy: Blue-Green** (with a local simulation and Recreate-style deploy on Render).
+
+**Production (Render):** Each successful pipeline run triggers a new deploy that replaces the running build. Render free tier does not support two live production slots, so cloud updates follow a **Recreate** pattern: stop old build, start new one. CI must pass before the deploy hook runs.
+
+**Local simulation (blue-green):** Two app instances run in parallel (blue on `:3001`, green on `:3002`). A router on `:8080` reads `data/active-target.json` and forwards traffic to the active slot. `switch-traffic` moves traffic to the new version; `rollback` restores the previous target without restarting both apps.
+
+This setup shows zero-downtime switching locally while keeping cloud delivery simple on free tier.
+
+### Rollback on Render
+
+1. Open the service in the [Render dashboard](https://dashboard.render.com).
+2. Go to **Events** (or **Deploys**).
+3. Find a previous successful deploy.
+4. Click **Rollback** (or **Redeploy** on that commit).
+
+The app rolls back to that build without changing Git history.
 
 ## Screenshots
 
@@ -147,6 +184,10 @@ Runs on push and pull request:
 ### CI — lint and test steps (expanded log)
 
 ![CI lint and test](docs/readme/ci-lint-test.png)
+
+### CI/CD — deploy to Render after tests pass (`main`)
+
+![CI deploy job on main](docs/readme/ci-deploy-main.png)
 
 ### Ansible
 
@@ -171,10 +212,11 @@ Developer
    |
    |  git push / pull request
    v
-GitHub Actions (CI)
+GitHub Actions (CI/CD)
    |-- npm ci
    |-- npm run lint
-   '-- npm test
+   |-- npm test
+   '-- deploy to Render (main only, after tests pass)
 
 Developer machine (local "production" demo)
    |
@@ -205,5 +247,5 @@ logs/health.log
 
 ## Repository
 
-https://github.com/Barbare997/midterm_devops
+https://github.com/Barbare997/devops-final
 
