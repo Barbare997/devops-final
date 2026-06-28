@@ -1,0 +1,2 @@
+# Promtail mounts the Docker socket for local log collection (dev stack only).
+AVD-DS-0015
