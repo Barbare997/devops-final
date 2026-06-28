@@ -240,16 +240,37 @@ Workflow file: `.github/workflows/ci.yml`
 On every push and pull request:
 
 - `npm ci`
+- `npm audit --audit-level=high` (blocks high/critical dependency issues)
 - `npm run lint`
 - `npm test`
+- Docker image build + Trivy scan (blocks critical/high image CVEs)
+- Gitleaks secrets scan (blocks leaked tokens/keys in the repo)
 
-On push to `main` only (after the steps above succeed):
+On push to `main` only (after all jobs above succeed):
 
 - Deploy to Render via deploy hook (`RENDER_DEPLOY_HOOK` secret)
 
 Render auto-deploy is **off**; production deploys run only from GitHub Actions.
 
-If lint or tests fail, the workflow stops and the **deploy** job does not run.
+If lint, tests, security scans, or container scan fail, the workflow stops and the **deploy** job does not run.
+
+## Security automation
+
+Three security checks run in CI on every push and pull request:
+
+| Check | Tool | What it does |
+|-------|------|--------------|
+| Dependency scan | `npm audit` | Finds known vulnerabilities in npm packages; fails on high/critical |
+| Container scan | Trivy | Builds the Docker image and scans OS + app packages for CVEs |
+| Secrets scan | Gitleaks | Scans git history for accidentally committed API keys, tokens, passwords |
+
+The Docker image is hardened for production: Alpine packages are upgraded, bundled `npm` is removed after install (not needed at runtime), and the app starts with `node src/server.js` directly.
+
+![npm audit in CI](docs/readme/final-ci-audit.png)
+
+![Trivy container scan in CI](docs/readme/final-ci-trivy.png)
+
+![Gitleaks secrets scan in CI](docs/readme/final-ci-secrets.png)
 
 ## Deployment strategy
 
@@ -325,9 +346,12 @@ Developer
    v
 GitHub Actions (CI/CD)
    |-- npm ci
+   |-- npm audit (high/critical)
    |-- npm run lint
    |-- npm test
-   '-- deploy to Render (main only, after tests pass)
+   |-- Trivy container scan
+   |-- Gitleaks secrets scan
+   '-- deploy to Render (main only, after all jobs pass)
 
 Developer machine (local "production" demo)
    |
