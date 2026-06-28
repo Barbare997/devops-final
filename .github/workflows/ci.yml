@@ -38,6 +38,15 @@ jobs:
       - name: Build image
         run: docker build -t todo-app:ci .
 
+      - name: Scan Docker and Compose config
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -69,3 +78,17 @@ jobs:
         run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
         env:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+
+      - name: Verify production health
+        run: |
+          url="https://devops-final-todo.onrender.com/health"
+          for i in $(seq 1 12); do
+            if curl -fsS "$url" | grep -q '"ok":true'; then
+              echo "Production health check passed"
+              exit 0
+            fi
+            echo "Waiting for Render to wake up (${i}/12)..."
+            sleep 15
+          done
+          echo "Production health check failed after deploy"
+          exit 1

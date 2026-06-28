@@ -1,270 +1,147 @@
 # DevOps Todo App
 
-Todo list web application with CI/CD to Render, infrastructure automation, blue-green deployment simulation, rollback scripts, and periodic health monitoring.
+Semester DevOps project built on one Node.js todo app. Same repo covers midterm (CI, Ansible, blue-green), homework (Render deploy, observability stack), and the final project (security scans, hardened Docker image, post-deploy checks).
 
-## Tech stack
+**Live app:** https://devops-final-todo.onrender.com  
+**Repo:** https://github.com/Barbare997/devops-final
 
-- Node.js 18+
-- Express
-- Jest + Supertest
-- ESLint
-- GitHub Actions
-- Ansible
-- Docker Compose
-- Prometheus + Grafana
-- Loki + Promtail
+Branches: `main` (production deploys) and `dev` (day-to-day work).
 
-## Application
+---
 
-- Dynamic route: `GET /todos/:id`
-- Input endpoint: `POST /todos`
-- Form UI: `GET /`
-- Health endpoint: `GET /health`
-- Prometheus metrics: `GET /metrics` (`app_requests_total`, `app_errors_total`)
-- JSON request logs (stdout)
-- Debug endpoint: `GET /debug/error` (returns 500 — used to test alerts)
+## Architecture
 
-## Local setup
+```
+Developer push / PR
+        |
+        v
+GitHub Actions
+   |-- lint + test + npm audit
+   |-- Trivy (config + container)
+   |-- Gitleaks
+   '-- deploy hook (main only) --> Render
+                                      |
+                               /health check in CI
+
+Local / evaluation (free tools, no paid cloud required)
+   |
+   |-- docker compose up -d  OR  .\scripts\start-env.ps1
+   |       app :3000, Prometheus :9090, Grafana :3001, Loki, Promtail
+   |
+   |-- ansible-playbook ansible/site.yml  (folders + Node on Debian/Ubuntu)
+   |
+   '-- blue/green demo: two backends + router :8080 + switch/rollback scripts
+```
+
+The app itself is small: Express, in-memory todos, JSON logs, Prometheus counters. Most of the project is the automation around it.
+
+---
+
+## Environment setup
+
+Everything needed for evaluation runs locally or in Docker. No paid services required to grade the project.
+
+### Option A — full observability stack (one command)
+
+**Windows:**
+
+```powershell
+cd "C:\Users\10\Documents\CS-6th\DevOps\midterm_devops"
+.\scripts\start-env.ps1
+```
+
+**Linux / macOS:**
 
 ```bash
-npm ci
-npm run lint
-npm test
-npm start
+./scripts/start-env.sh
 ```
 
-Windows PowerShell (same steps; run from the repo folder):
+Same as `docker compose up -d --build`. Brings up app, Prometheus, Grafana, Loki, and Promtail.
 
-```powershell
-npm ci
-npm run lint
-npm test
-npm start
-```
-
-App URL: `http://localhost:3000/`
-
-## Live application (Render)
-
-**URL:** https://devops-final-todo.onrender.com
-
-Health check: https://devops-final-todo.onrender.com/health
-
-Hosted on [Render](https://render.com) (free tier). After a period of inactivity the service may take ~30 seconds to wake up on the first request.
-
-![Live app on Render](docs/readme/live-render.png)
-
-## Blue-green deployment simulation
-
-Run two app instances:
-
-- Blue: port `3001`
-- Green: port `3002`
-
-Use **three terminals**. If PowerShell blocks scripts, run once per session:
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-```
-
-**Windows PowerShell**
-
-Terminal A (blue):
-
-```powershell
-$env:PORT="3001"
-$env:DEPLOY_SLOT="blue"
-$env:APP_VERSION="1"
-npm start
-```
-
-Terminal B (green):
-
-```powershell
-$env:PORT="3002"
-$env:DEPLOY_SLOT="green"
-$env:APP_VERSION="2"
-npm start
-```
-
-Terminal C (router):
-
-```powershell
-npm run start:router
-```
-
-**macOS / Linux**
-
-Terminal A (blue):
-
-```bash
-PORT=3001 DEPLOY_SLOT=blue APP_VERSION=1 npm start
-```
-
-Terminal B (green):
-
-```bash
-PORT=3002 DEPLOY_SLOT=green APP_VERSION=2 npm start
-```
-
-Terminal C (router):
-
-```bash
-npm run start:router
-```
-
-Router URL: `http://localhost:8080/`
-
-Switch active traffic:
-
-- Windows: `.\scripts\switch-traffic.ps1`
-- Linux/macOS: `bash scripts/switch-traffic.sh`
-
-Rollback:
-
-- Windows: `.\scripts\rollback.ps1`
-- Linux/macOS: `bash scripts/rollback.sh`
-
-## Monitoring
-
-Periodic health checks are logged to `logs/health.log`.
-
-- Windows: `.\scripts\health-monitor.ps1`
-- Linux/macOS: `bash scripts/health-monitor.sh`
-
-## Observability stack (Docker Compose)
-
-The Docker stack runs the todo app with Prometheus, Grafana, Loki, and Promtail.
-
-Start everything:
-
-```bash
-docker compose up -d
-```
-
-Windows PowerShell:
-
-```powershell
-docker compose up -d
-docker compose ps
-```
-
-Check that `app`, `prometheus`, `grafana`, `loki`, and `promtail` are all **Up**.
-
-| Service | URL |
-|---------|-----|
-| App | http://localhost:3000 |
+| Service    | URL |
+|------------|-----|
+| App        | http://localhost:3000 |
 | Prometheus | http://localhost:9090 |
-| Grafana | http://localhost:3001 (`admin` / `admin`) |
-| Loki | http://localhost:3100 |
+| Grafana    | http://localhost:3001 (`admin` / `admin`) |
+| Loki       | http://localhost:3100 |
 
-Stop:
+Stop: `docker compose down`
 
-```bash
-docker compose down
-```
-
-### Architecture diagram
-
-```
-Todo app (Docker)
-   |  JSON logs to stdout
-   |  GET /metrics
-   v
-Promtail ----------------------> Loki --------> Grafana Explore (logs)
-   ^                                              ^
-   | reads container logs                         |
-   |                                              |
-Prometheus <--- scrapes /metrics --- App          +--- dashboards + alerts
-```
-
-### Logging strategy
-
-Each HTTP request is logged as one JSON line in `src/logger.js` (`timestamp`, `level`, `message`, `method`, `path`, `status`, `durationMs`).
-
-Promtail picks up the app container logs and sends them to Loki. In Grafana Explore (Loki datasource), I filter with:
-
-```logql
-{container=~".*app.*"} |= "request handled"
-```
-
-Metrics are separate: Prometheus scrapes `/metrics` every 15 seconds. Custom counters are `app_requests_total` and `app_errors_total` in `src/metrics.js`.
-
-### Alerting
-
-Prometheus rule in `prometheus/alert.rules.yml`:
-
-`sum(increase(app_errors_total[1m])) > 5`
-
-Grafana has the same rule as **High Application Error Rate** under **Alerting → Alert rules**.
-
-### Simulate the CRITICAL alert
-
-1. Run `docker compose up -d`
-2. Generate errors (more than 5 in one minute), e.g. in PowerShell:
+### Option B — app only (no Docker)
 
 ```powershell
-1..10 | ForEach-Object { try { Invoke-WebRequest "http://localhost:3000/debug/error" -UseBasicParsing } catch {} }
+npm ci
+npm run lint
+npm test
+npm start
 ```
 
-Or hit http://localhost:3000/debug/error in the browser several times.
+App: http://localhost:3000/
 
-3. After about a minute, check **Grafana → Alerting → Alert rules** or **Prometheus → Alerts** at http://localhost:9090/alerts
+### Option C — machine prep with Ansible
 
-### Analysis
-
-**Why is JSON logging better than plain text?**
-
-With JSON you can filter on fields like `status` or `path` directly in Loki. Plain text logs need regex or manual parsing, and that gets messy when the log format changes.
-
-**Prometheus vs Loki?**
-
-Prometheus keeps numbers over time (request counts, error rates) — useful for graphs and alerts. Loki keeps the actual log lines — useful when you need to see what one request did. Metrics show trends; logs show details.
-
-**Keeping logs for 6 months without running out of disk?**
-
-Set a retention period in Loki so old logs are deleted automatically. For longer storage, move data to object storage (e.g. S3). Also avoid logging too much: drop debug noise in production and put high-volume numbers in Prometheus instead of logs.
-
-## Infrastructure automation
+From repo root (WSL on Windows, or Linux):
 
 ```bash
 ansible-playbook ansible/site.yml
 ```
 
-On Windows, run this from **WSL (Ubuntu)**. Install Ansible inside WSL (`sudo apt install ansible`), `cd` to the project path under `/mnt/c/...`, then run the command above. The playbook still targets the same repo files on your Windows drive.
+Creates `logs/` and `data/`, installs Node.js on Debian/Ubuntu. On other OS families it only creates folders — install Node 18+ yourself, then `npm ci`.
+
+---
+
+## Application endpoints
+
+| Route | Purpose |
+|-------|---------|
+| `GET /` | Todo form UI |
+| `POST /todos` | Create todo (JSON) |
+| `GET /todos/:id` | Dynamic route — single todo |
+| `GET /health` | Health check |
+| `GET /metrics` | Prometheus metrics (`app_requests_total`, `app_errors_total`) |
+| `GET /debug/error` | Returns 500 — used to test alerts |
+
+Logs go to stdout as JSON (`src/logger.js`). Metrics are in `src/metrics.js`.
+
+---
 
 ## CI/CD pipeline
 
-Workflow file: `.github/workflows/ci.yml`
+Workflow: `.github/workflows/ci.yml`
 
-On every push and pull request:
+**Every push and pull request** (runs in parallel):
 
-- `npm ci`
-- `npm audit --audit-level=high` (blocks high/critical dependency issues)
-- `npm run lint`
-- `npm test`
-- Docker image build + Trivy scan (blocks critical/high image CVEs)
-- Gitleaks secrets scan (blocks leaked tokens/keys in the repo)
+1. **lint-and-test** — `npm ci`, `npm audit --audit-level=high`, lint, Jest tests  
+2. **container-scan** — build Docker image, Trivy config scan (Dockerfile + compose), Trivy image scan  
+3. **secrets-scan** — Gitleaks over full git history  
 
-On push to `main` only (after all jobs above succeed):
+**Push to `main` only** (after all three jobs pass):
 
-- Deploy to Render via deploy hook (`RENDER_DEPLOY_HOOK` secret)
+4. **deploy** — POST to Render deploy hook (`RENDER_DEPLOY_HOOK` secret)  
+5. **Verify production health** — polls `https://devops-final-todo.onrender.com/health` until OK (handles Render cold start)
 
-Render auto-deploy is **off**; production deploys run only from GitHub Actions.
+Render auto-deploy is turned off. Production only updates from GitHub Actions.
 
-If lint, tests, security scans, or container scan fail, the workflow stops and the **deploy** job does not run.
+### Deployment strategy
+
+**Render (production):** Recreate-style deploy on free tier — each green pipeline run replaces the live build. CI must pass first; then the deploy hook fires; then CI checks `/health`.
+
+**Local (blue-green simulation):** Two backends run at once (blue `:3001`, green `:3002`). Router on `:8080` reads `data/active-target.json` and forwards traffic. `switch-traffic` moves to the new slot; `rollback` restores the previous target without restarting both apps.
+
+**Rollback on Render:** Dashboard → service → Events → pick a previous deploy → Rollback.
+
+---
 
 ## Security automation
 
-Three security checks run in CI on every push and pull request:
-
-| Check | Tool | What it does |
+| Check | Tool | When it runs |
 |-------|------|--------------|
-| Dependency scan | `npm audit` | Finds known vulnerabilities in npm packages; fails on high/critical |
-| Container scan | Trivy | Builds the Docker image and scans OS + app packages for CVEs |
-| Secrets scan | Gitleaks | Scans git history for accidentally committed API keys, tokens, passwords |
+| Dependency vulnerabilities | `npm audit` | Every CI run; fails on high/critical |
+| Container CVEs | Trivy (image) | After `docker build` in CI |
+| Docker / Compose misconfig | Trivy (config) | Scans `Dockerfile`, `docker-compose.yml` |
+| Leaked secrets | Gitleaks | Full repo history on every CI run |
 
-The Docker image is hardened for production: Alpine packages are upgraded, bundled `npm` is removed after install (not needed at runtime), and the app starts with `node src/server.js` directly.
+**Docker hardening** (`Dockerfile`): Alpine packages upgraded, production deps only (`npm ci --omit=dev`), bundled `npm` removed after install, app starts with `node src/server.js` (no npm at runtime). This cleared HIGH findings from the base Node image during Trivy scans.
 
 ![npm audit in CI](docs/readme/final-ci-audit.png)
 
@@ -272,115 +149,135 @@ The Docker image is hardened for production: Alpine packages are upgraded, bundl
 
 ![Gitleaks secrets scan in CI](docs/readme/final-ci-secrets.png)
 
-## Deployment strategy
+![Full CI pipeline on main](docs/readme/final-ci-main-pipeline.png)
 
-**Chosen strategy: Blue-Green** (with a local simulation and Recreate-style deploy on Render).
+![Deploy job on main](docs/readme/final-ci-deploy-main.png)
 
-**Production (Render):** Each successful pipeline run triggers a new deploy that replaces the running build. Render free tier does not support two live production slots, so cloud updates follow a **Recreate** pattern: stop old build, start new one. CI must pass before the deploy hook runs.
+---
 
-**Local simulation (blue-green):** Two app instances run in parallel (blue on `:3001`, green on `:3002`). A router on `:8080` reads `data/active-target.json` and forwards traffic to the active slot. `switch-traffic` moves traffic to the new version; `rollback` restores the previous target without restarting both apps.
+## Monitoring, logging, and alerting
 
-This setup shows zero-downtime switching locally while keeping cloud delivery simple on free tier.
+### Docker stack
 
-### Rollback on Render
+Promtail reads container logs → Loki → Grafana Explore. Prometheus scrapes `/metrics` every 15s → Grafana dashboards and alerts.
 
-1. Open the service in the [Render dashboard](https://dashboard.render.com).
-2. Go to **Events** (or **Deploys**).
-3. Find a previous successful deploy.
-4. Click **Rollback** (or **Redeploy** on that commit).
+Example Loki query:
 
-The app rolls back to that build without changing Git history.
+```logql
+{container=~".*app.*"} |= "request handled"
+```
 
-## Screenshots
+**Prometheus alert** (`prometheus/alert.rules.yml`):
 
-### CI — workflow runs (`main` and `dev`)
+`sum(increase(app_errors_total[1m])) > 5` → CRITICAL when more than 5 errors in one minute.
 
-![CI runs on main and dev](docs/readme/ci-runs-main-dev.png)
+Grafana has the same rule as **High Application Error Rate**.
 
-### CI — job summary (green run)
+**Test the alert:** with stack running, hit `/debug/error` 10+ times in a minute, then check Grafana → Alerting or Prometheus → Alerts.
 
-![CI job summary](docs/readme/ci-job-summary.png)
-
-### CI — lint and test steps (expanded log)
-
-![CI lint and test](docs/readme/ci-lint-test.png)
-
-### CI/CD — deploy to Render after tests pass (`main`)
-
-![CI deploy job on main](docs/readme/ci-deploy-main.png)
-
-### Ansible
-
-![Ansible playbook run](docs/readme/ansible-run.png)
-
-### Deployment — app through router (`http://localhost:8080`)
-
-![Running app via router](docs/readme/deploy-router-8080.png)
-
-### Blue-green — switch and rollback (terminal output)
-
-![Switch and rollback](docs/readme/deploy-switch-rollback.png)
-
-### Monitoring — health log (`logs/health.log`)
-
-![Health monitor log](docs/readme/monitoring-health-log.png)
-
-### Observability — Grafana metrics dashboard
-
-![Grafana metrics dashboard](docs/readme/hw2-grafana-metrics.png)
-
-### Observability — Grafana alert rule
+![Grafana metrics](docs/readme/hw2-grafana-metrics.png)
 
 ![Grafana alert rule](docs/readme/hw2-grafana-alert-rule.png)
 
-### Observability — JSON logs in Grafana Explore (Loki)
-
 ![JSON logs in Grafana Explore](docs/readme/hw2-logs-json.png)
 
-### CI/CD workflow diagram
+### Health monitor script
 
-```
-Developer
-   |
-   |  git push / pull request
-   v
-GitHub Actions (CI/CD)
-   |-- npm ci
-   |-- npm audit (high/critical)
-   |-- npm run lint
-   |-- npm test
-   |-- Trivy container scan
-   |-- Gitleaks secrets scan
-   '-- deploy to Render (main only, after all jobs pass)
+Polls `/health` on an interval and appends to `logs/health.log`.
 
-Developer machine (local "production" demo)
-   |
-   |  ansible-playbook ansible/site.yml  (environment prep)
-   v
-Two backends
-   |-- Blue app  :3001
-   '-- Green app :3002
-           ^
-           |
-   Router :8080 (src/router.js)
-           |
-           |  reads
-           v
-   data/active-target.json
-      ^            ^
-      |            |
-      |     switch-traffic script
-      |            |
-      '---- rollback script
-
-Health monitor script
-   |
-   |  polls http://localhost:8080/health
-   v
-logs/health.log
+```powershell
+.\scripts\health-monitor.ps1
 ```
 
-## Repository
+Default URL: `http://127.0.0.1:8080/health` (router). Override with `$env:HEALTH_URL`.
 
-https://github.com/Barbare997/devops-final
+---
 
+## Reliability
+
+What is in place for production-style operations:
+
+| Area | Implementation |
+|------|----------------|
+| Health checks | `/health` endpoint; CI post-deploy curl; local health monitor script |
+| Rollback | Local: `scripts/rollback.*`; Render: dashboard rollback to previous deploy |
+| Alerting | Prometheus + Grafana on error rate spike |
+| Failure recovery | CI blocks bad deploys; Render keeps last good build until new one passes health |
+| Availability target | **99% monthly** for `/health` on Render (free tier allows brief sleep/cold starts; alerts catch error storms locally) |
+
+### If something breaks in production
+
+1. Check GitHub Actions — did the last `main` run pass all jobs including **Verify production health**?  
+2. Open Render → Events — is the latest deploy live or failed?  
+3. Hit `/health` and `/metrics` on the live URL.  
+4. If the new version is bad: **Rollback** in Render to the previous deploy (fastest fix).  
+5. Fix on `dev`, open PR, merge when CI is green.  
+6. For local stack issues: `docker compose ps`, check Promtail is Up, restart with `docker compose up -d`.
+
+---
+
+## Blue-green deployment (local demo)
+
+Three terminals. If PowerShell blocks scripts:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+**Terminal A (blue):**
+
+```powershell
+$env:PORT="3001"; $env:DEPLOY_SLOT="blue"; $env:APP_VERSION="1"; npm start
+```
+
+**Terminal B (green):**
+
+```powershell
+$env:PORT="3002"; $env:DEPLOY_SLOT="green"; $env:APP_VERSION="2"; npm start
+```
+
+**Terminal C (router):**
+
+```powershell
+npm run start:router
+```
+
+Router: http://localhost:8080/
+
+Switch: `.\scripts\switch-traffic.ps1`  
+Rollback: `.\scripts\rollback.ps1`
+
+---
+
+## Live application (Render)
+
+https://devops-final-todo.onrender.com
+
+Health: https://devops-final-todo.onrender.com/health
+
+Free tier — first request after idle can take ~30 seconds.
+
+![Live app on Render](docs/readme/live-render.png)
+
+---
+
+## Tech stack
+
+Node.js 20, Express, Jest, ESLint, GitHub Actions, Ansible, Docker Compose, Prometheus, Grafana, Loki, Promtail, Trivy, Gitleaks, Render.
+
+---
+
+## How to run tests locally
+
+```powershell
+npm ci
+npm run lint
+npm test
+npm audit --audit-level=high
+```
+
+Docker image build (optional):
+
+```powershell
+docker build -t todo-app:ci .
+```
