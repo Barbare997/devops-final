@@ -46,7 +46,8 @@ app.get('/health', (req, res) => {
   res.json({
     ok: true,
     version: process.env.APP_VERSION || '1',
-    slot: process.env.DEPLOY_SLOT || 'local'
+    slot: process.env.DEPLOY_SLOT || 'local',
+    commit: process.env.RENDER_GIT_COMMIT || null
   });
 });
 

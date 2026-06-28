@@ -81,15 +81,21 @@ jobs:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
 
       - name: Verify production health
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
           url="https://devops-final-todo.onrender.com/health"
-          for i in $(seq 1 12); do
-            if curl -fsS "$url" | grep -q '"ok":true'; then
-              echo "Production health check passed"
+          echo "Waiting 90s for Render build to start..."
+          sleep 90
+          for i in $(seq 1 30); do
+            body=$(curl -fsS "$url" || true)
+            echo "Attempt ${i}: ${body}"
+            if echo "$body" | grep -q '"ok":true' && echo "$body" | grep -q "${EXPECTED_SHA}"; then
+              echo "Production deploy verified for commit ${EXPECTED_SHA}"
               exit 0
             fi
-            echo "Waiting for Render to wake up (${i}/12)..."
-            sleep 15
+            echo "Waiting for new deploy (${i}/30)..."
+            sleep 20
           done
-          echo "Production health check failed after deploy"
+          echo "Production deploy verification failed"
           exit 1

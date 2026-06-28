@@ -46,7 +46,7 @@ Everything needed for evaluation runs locally or in Docker. No paid services req
 **Windows:**
 
 ```powershell
-cd "C:\Users\10\Documents\CS-6th\DevOps\midterm_devops"
+cd path\to\midterm_devops
 .\scripts\start-env.ps1
 ```
 
@@ -65,7 +65,7 @@ Copy `.env.example` to `.env` first if you don't have one (Grafana password). Th
 | App        | http://localhost:3000 |
 | Prometheus | http://localhost:9090 |
 | Grafana    | http://localhost:3001 (`admin` / `admin`) |
-| Loki       | http://localhost:3100 |
+| Loki       | http://localhost:3100/ready (API only — use Grafana for logs) |
 
 Stop: `docker compose down`
 
@@ -123,6 +123,18 @@ Workflow: `.github/workflows/ci.yml`
 5. **Verify production health** — polls `https://devops-final-todo.onrender.com/health` until OK (handles Render cold start)
 
 Render auto-deploy is turned off. Production only updates from GitHub Actions.
+
+**Render service settings** (match `render.yaml` in repo):
+
+| Setting | Value |
+|---------|-------|
+| Runtime | Node |
+| Build command | `npm ci --omit=dev` |
+| Start command | `npm start` |
+| Health check path | `/health` |
+| Auto-Deploy | **Off** (deploy hook only) |
+
+If Auto-Deploy stays on, a git push to `main` and the CI deploy hook can race and one deploy may fail. After a successful deploy, `/health` includes a `commit` field with the live git SHA.
 
 ### Deployment strategy
 
