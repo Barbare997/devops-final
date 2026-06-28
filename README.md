@@ -10,6 +10,9 @@ Todo list web application with CI/CD to Render, infrastructure automation, blue-
 - ESLint
 - GitHub Actions
 - Ansible
+- Docker Compose
+- Prometheus + Grafana
+- Loki + Promtail
 
 ## Application
 
@@ -17,6 +20,9 @@ Todo list web application with CI/CD to Render, infrastructure automation, blue-
 - Input endpoint: `POST /todos`
 - Form UI: `GET /`
 - Health endpoint: `GET /health`
+- Prometheus metrics: `GET /metrics` (`app_requests_total`, `app_errors_total`)
+- JSON request logs (stdout)
+- Debug endpoint: `GET /debug/error` (returns 500 — used to test alerts)
 
 ## Local setup
 
@@ -126,6 +132,99 @@ Periodic health checks are logged to `logs/health.log`.
 - Windows: `.\scripts\health-monitor.ps1`
 - Linux/macOS: `bash scripts/health-monitor.sh`
 
+## Observability stack (Docker Compose)
+
+The Docker stack runs the todo app with Prometheus, Grafana, Loki, and Promtail.
+
+Start everything:
+
+```bash
+docker compose up -d
+```
+
+Windows PowerShell:
+
+```powershell
+docker compose up -d
+docker compose ps
+```
+
+Check that `app`, `prometheus`, `grafana`, `loki`, and `promtail` are all **Up**.
+
+| Service | URL |
+|---------|-----|
+| App | http://localhost:3000 |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3001 (`admin` / `admin`) |
+| Loki | http://localhost:3100 |
+
+Stop:
+
+```bash
+docker compose down
+```
+
+### Architecture diagram
+
+```
+Todo app (Docker)
+   |  JSON logs to stdout
+   |  GET /metrics
+   v
+Promtail ----------------------> Loki --------> Grafana Explore (logs)
+   ^                                              ^
+   | reads container logs                         |
+   |                                              |
+Prometheus <--- scrapes /metrics --- App          +--- dashboards + alerts
+```
+
+### Logging strategy
+
+Each HTTP request is logged as one JSON line in `src/logger.js` (`timestamp`, `level`, `message`, `method`, `path`, `status`, `durationMs`).
+
+Promtail picks up the app container logs and sends them to Loki. In Grafana Explore (Loki datasource), I filter with:
+
+```logql
+{container=~".*app.*"} |= "request handled"
+```
+
+Metrics are separate: Prometheus scrapes `/metrics` every 15 seconds. Custom counters are `app_requests_total` and `app_errors_total` in `src/metrics.js`.
+
+### Alerting
+
+Prometheus rule in `prometheus/alert.rules.yml`:
+
+`sum(increase(app_errors_total[1m])) > 5`
+
+Grafana has the same rule as **High Application Error Rate** under **Alerting → Alert rules**.
+
+### Simulate the CRITICAL alert
+
+1. Run `docker compose up -d`
+2. Generate errors (more than 5 in one minute), e.g. in PowerShell:
+
+```powershell
+1..10 | ForEach-Object { try { Invoke-WebRequest "http://localhost:3000/debug/error" -UseBasicParsing } catch {} }
+```
+
+Or hit http://localhost:3000/debug/error in the browser several times.
+
+3. After about a minute, check **Grafana → Alerting → Alert rules** or **Prometheus → Alerts** at http://localhost:9090/alerts
+
+### Analysis
+
+**Why is JSON logging better than plain text?**
+
+With JSON you can filter on fields like `status` or `path` directly in Loki. Plain text logs need regex or manual parsing, and that gets messy when the log format changes.
+
+**Prometheus vs Loki?**
+
+Prometheus keeps numbers over time (request counts, error rates) — useful for graphs and alerts. Loki keeps the actual log lines — useful when you need to see what one request did. Metrics show trends; logs show details.
+
+**Keeping logs for 6 months without running out of disk?**
+
+Set a retention period in Loki so old logs are deleted automatically. For longer storage, move data to object storage (e.g. S3). Also avoid logging too much: drop debug noise in production and put high-volume numbers in Prometheus instead of logs.
+
 ## Infrastructure automation
 
 ```bash
@@ -204,6 +303,18 @@ The app rolls back to that build without changing Git history.
 ### Monitoring — health log (`logs/health.log`)
 
 ![Health monitor log](docs/readme/monitoring-health-log.png)
+
+### Observability — Grafana metrics dashboard
+
+![Grafana metrics dashboard](docs/readme/hw2-grafana-metrics.png)
+
+### Observability — Grafana alert rule
+
+![Grafana alert rule](docs/readme/hw2-grafana-alert-rule.png)
+
+### Observability — JSON logs in Grafana Explore (Loki)
+
+![JSON logs in Grafana Explore](docs/readme/hw2-logs-json.png)
 
 ### CI/CD workflow diagram
 

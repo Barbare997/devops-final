@@ -1,0 +1,53 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: AppAlerts
+    folder: Homework 2
+    interval: 1m
+    rules:
+      - uid: high-app-error-rate
+        title: High Application Error Rate
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: sum(increase(app_errors_total[1m]))
+              instant: true
+              range: false
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: B
+              conditions:
+                - evaluator:
+                    params:
+                      - 5
+                    type: gt
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+                  type: query
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: Application error rate exceeds 5 per minute
+        labels:
+          severity: critical

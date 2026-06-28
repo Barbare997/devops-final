@@ -1,10 +1,46 @@
 const express = require('express');
 const store = require('./store');
+const { log } = require('./logger');
+const { register, appRequestsTotal, appErrorsTotal } = require('./metrics');
 
 const app = express();
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+app.use((req, res, next) => {
+  const start = Date.now();
+
+  res.on('finish', () => {
+    const route = req.route?.path || req.path;
+    const labels = {
+      method: req.method,
+      route,
+      status: String(res.statusCode)
+    };
+
+    appRequestsTotal.inc(labels);
+
+    if (res.statusCode >= 400) {
+      appErrorsTotal.inc(labels);
+    }
+
+    log('info', 'request handled', {
+      method: req.method,
+      path: req.originalUrl,
+      route,
+      status: res.statusCode,
+      durationMs: Date.now() - start
+    });
+  });
+
+  next();
+});
+
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
+});
 
 app.get('/health', (req, res) => {
   res.json({
@@ -97,6 +133,10 @@ app.post('/todos/:id/toggle', (req, res) => {
     return res.status(404).json({ error: 'Not found' });
   }
   res.redirect('/');
+});
+
+app.get('/debug/error', (req, res) => {
+  res.status(500).json({ error: 'Simulated error for observability testing' });
 });
 
 module.exports = app;

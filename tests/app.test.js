@@ -38,4 +38,12 @@ describe('Todo app', () => {
   test('GET /todos/:id returns 404 when missing', async () => {
     await request(app).get('/todos/99').expect(404);
   });
+
+  test('GET /metrics exposes Prometheus counters', async () => {
+    await request(app).get('/health').expect(200);
+
+    const res = await request(app).get('/metrics').expect(200);
+    expect(res.text).toContain('app_requests_total');
+    expect(res.text).toContain('app_errors_total');
+  });
 });

@@ -1,0 +1,62 @@
+{
+  "uid": "todo-app-metrics",
+  "title": "Todo App Metrics",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 2,
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request rate (per second)",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(app_requests_total[1m]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Errors per minute",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(app_errors_total[1m])) or on() vector(0)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Total requests",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(app_requests_total)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Total errors",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(app_errors_total) or on() vector(0)",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

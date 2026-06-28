@@ -1,0 +1,10 @@
+node_modules
+coverage
+logs
+.git
+.github
+docs
+ansible
+tests
+*.md
+.env
