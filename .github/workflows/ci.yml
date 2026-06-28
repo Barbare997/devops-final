@@ -46,6 +46,7 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: CRITICAL,HIGH
+          trivyignores: .trivyignore
 
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0

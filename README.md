@@ -58,6 +58,8 @@ cd "C:\Users\10\Documents\CS-6th\DevOps\midterm_devops"
 
 Same as `docker compose up -d --build`. Brings up app, Prometheus, Grafana, Loki, and Promtail.
 
+Copy `.env.example` to `.env` first if you don't have one (Grafana password). The start scripts do this automatically.
+
 | Service    | URL |
 |------------|-----|
 | App        | http://localhost:3000 |

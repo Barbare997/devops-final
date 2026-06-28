@@ -3,6 +3,11 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+if (-not (Test-Path ".env")) {
+  Copy-Item ".env.example" ".env"
+  Write-Host "Created .env from .env.example"
+}
+
 Write-Host "Starting observability stack (app, Prometheus, Grafana, Loki, Promtail)..."
 docker compose up -d --build
 docker compose ps

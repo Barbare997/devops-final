@@ -4,6 +4,11 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
+if [ ! -f .env ]; then
+  cp .env.example .env
+  echo "Created .env from .env.example"
+fi
+
 echo "Starting observability stack (app, Prometheus, Grafana, Loki, Promtail)..."
 docker compose up -d --build
 docker compose ps
