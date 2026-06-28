@@ -7,11 +7,12 @@
   "scripts": {
     "start": "node src/server.js",
     "start:router": "node src/router.js",
+    "build": "npm ci --omit=dev",
     "lint": "eslint .",
     "test": "jest --coverage"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "dependencies": {
     "express": "^4.21.2",
